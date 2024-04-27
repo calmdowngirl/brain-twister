@@ -1,15 +1,13 @@
 //! 20 April 2024|New Scientist|45
 //! arrange the digits 1-9 in a line so that each pair of adjacent digits differs by either 2 or 3
 
-use std::cell::RefCell;
-
 const COLLECTION: [i8; 9] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 pub fn solve() {
     let mut result: Vec<String> = vec![];
 
     COLLECTION.iter().for_each(|&elem| {
-        Tree::traverse(elem, RefCell::new(vec![]), &mut result);
+        Tree::traverse(elem, &mut vec![], &mut result);
     });
 
     println!("there r {} ways to arrange the digits", result.len());
@@ -22,10 +20,10 @@ struct Tree {
 }
 
 impl Tree {
-    fn traverse(node: i8, visited: RefCell<Vec<i8>>, result: &mut Vec<String>) -> Tree {
-        visited.borrow_mut().push(node);
-        if visited.borrow().len() == 9 {
-            let s = format!("{:?}", visited.borrow());
+    fn traverse(node: i8, visited: &mut Vec<i8>, result: &mut Vec<String>) -> Tree {
+        visited.push(node);
+        if visited.len() == 9 {
+            let s = format!("{:?}", visited);
             result.push(s)
         }
 
@@ -34,8 +32,8 @@ impl Tree {
             _children: get_children_values(node).map(|values| {
                 values
                     .into_iter()
-                    .filter(|v| !visited.borrow().contains(v))
-                    .map(|v| Self::traverse(v, visited.clone(), result))
+                    .filter(|v| !visited.contains(v))
+                    .map(|v| Self::traverse(v, visited.clone().as_mut(), result))
                     .collect()
             }),
         }
