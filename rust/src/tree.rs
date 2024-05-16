@@ -43,19 +43,16 @@ pub fn main() {
     };
 
     let mut should_draw_bar: Vec<bool> = vec![true];
-    let mut result: Vec<String> = vec![];
 
     Tree::traverse(
         root,
         "".to_string(),
         &mut should_draw_bar,
         &mut HashMap::<i32, Vec<String>>::new(),
-        &mut result,
         0,
         max_depth,
         should_show_hidden,
     );
-    result.iter().for_each(|s| println!("{}", s))
 }
 
 struct Tree {
@@ -69,7 +66,6 @@ impl Tree {
         symbol: String,
         should_draw_bar: &mut Vec<bool>,
         visited: &mut HashMap<i32, Vec<String>>,
-        result: &mut Vec<String>,
         mut curr_depth: i32,
         max_depth: i32,
         should_show_hidden: bool,
@@ -111,7 +107,7 @@ impl Tree {
             }
             format!("{}{}{}", pre, symbol, dir_name)
         };
-        result.push(s);
+        println!("{}", s);
         curr_depth += 1;
 
         let vc = visited.clone();
@@ -148,7 +144,6 @@ impl Tree {
                             symbol,
                             should_draw_bar,
                             visited,
-                            result,
                             curr_depth,
                             max_depth,
                             should_show_hidden,
@@ -170,20 +165,33 @@ fn get_dir_entry_names(
         return None;
     }
 
+    // skip symlink
+    if path.contains(" -> ") {
+        return None;
+    }
+
     let mut sub_dirs: Vec<String> = vec![];
     let mut files: Vec<String> = vec![];
     let mut names: Vec<String> = vec![];
 
     if let Ok(entries) = fs::read_dir(path) {
         for entry in entries.flatten() {
-            let s = entry.path().to_string_lossy().to_string();
+            let s = entry.path().display().to_string();
             if get_name(&s).starts_with(".") && !should_show_hidden {
                 continue;
             }
-            if entry.file_type().unwrap().is_dir() {
-                sub_dirs.push(s);
-            } else {
-                files.push(s);
+            if let Ok(metadata) = fs::symlink_metadata(&s) {
+                let file_type = metadata.file_type();
+                match file_type {
+                    t if t.is_dir() => sub_dirs.push(s),
+                    t if t.is_file() => files.push(s),
+                    t if t.is_symlink() => {
+                        if let Some(target) = entry.path().read_link().ok() {
+                            files.push(format!("{} -> {}", get_name(&s), target.display()))
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
         sub_dirs.sort();
@@ -197,13 +205,16 @@ fn get_dir_entry_names(
 }
 
 fn is_valid_path(p: &str) -> bool {
+    // symlink
+    if p.contains(" -> ") {
+        return true;
+    }
     let path = Path::new(&p);
     path.exists()
 }
 
 fn is_directory(path: &str) -> bool {
-    let metadata = fs::metadata(path);
-    if let Ok(metadata) = metadata {
+    if let Ok(metadata) = fs::symlink_metadata(path) {
         metadata.is_dir()
     } else {
         false
