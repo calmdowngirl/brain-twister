@@ -71,15 +71,14 @@ impl Tree {
         should_show_hidden: bool,
     ) -> Tree {
         let mut dir_name = get_name(&node);
-        let mut is_valid = true;
-        if !is_valid_path(&node) {
-            dir_name.push_str("  [error]");
-            is_valid = false;
-        }
 
-        if curr_depth == 0 && (!is_directory(&node) || !is_valid) {
+        if curr_depth == 0 && !is_directory(&node) {
             eprintln!("{} is not a valid directory", node);
             process::exit(1);
+        }
+
+        if !is_valid_path(&node) {
+            panic!("invalid path, this should not happen")
         }
 
         if let Some(v) = visited.get_mut(&curr_depth) {
@@ -89,7 +88,7 @@ impl Tree {
         }
 
         let mut dir_entries_names = None;
-        if is_valid && is_directory(&node) {
+        if is_directory(&node) {
             dir_entries_names =
                 match get_dir_entry_names(node.clone(), curr_depth, max_depth, should_show_hidden) {
                     Ok(entries) => entries,
