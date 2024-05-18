@@ -9,8 +9,8 @@
 
 use std::collections::HashMap;
 use std::env::{args, current_dir};
-use std::fs;
 use std::path::Path;
+use std::{fs, io, process};
 
 pub fn main() {
     let args: Vec<String> = args().collect();
@@ -70,12 +70,16 @@ impl Tree {
         max_depth: i32,
         should_show_hidden: bool,
     ) -> Tree {
+        let mut dir_name = get_name(&node);
+        let mut is_valid = true;
         if !is_valid_path(&node) {
-            panic!("{} is not a valid path", node)
+            dir_name.push_str("  [error]");
+            is_valid = false;
         }
 
-        if curr_depth == 0 && !is_directory(&node) {
-            panic!("{} is not a directory", node)
+        if curr_depth == 0 && (!is_directory(&node) || !is_valid) {
+            eprintln!("{} is not a valid directory", node);
+            process::exit(1);
         }
 
         if let Some(v) = visited.get_mut(&curr_depth) {
@@ -84,9 +88,18 @@ impl Tree {
             visited.insert(curr_depth, vec![node.clone()]);
         }
 
-        let dir_name = get_name(&node);
-        let dir_entries_names =
-            get_dir_entry_names(node.clone(), curr_depth, max_depth, should_show_hidden);
+        let mut dir_entries_names = None;
+        if is_valid && is_directory(&node) {
+            dir_entries_names =
+                match get_dir_entry_names(node.clone(), curr_depth, max_depth, should_show_hidden) {
+                    Ok(entries) => entries,
+                    Err(e) => {
+                        dir_name.push_str(&format!("  [error opening dir {:?}]", e.to_string()));
+                        None
+                    }
+                }
+        }
+
         let num_names = match &dir_entries_names {
             Some(vs) => vs.len(),
             _ => 0,
@@ -160,48 +173,54 @@ fn get_dir_entry_names(
     curr_depth: i32,
     max_depth: i32,
     should_show_hidden: bool,
-) -> Option<Vec<String>> {
+) -> Result<Option<Vec<String>>, io::Error> {
     if max_depth > 0 && curr_depth >= max_depth {
-        return None;
+        return Ok(None);
     }
 
     // skip symlink
     if path.contains(" -> ") {
-        return None;
+        return Ok(None);
     }
 
     let mut sub_dirs: Vec<String> = vec![];
     let mut files: Vec<String> = vec![];
     let mut names: Vec<String> = vec![];
 
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let s = entry.path().display().to_string();
-            if get_name(&s).starts_with(".") && !should_show_hidden {
-                continue;
-            }
-            if let Ok(metadata) = fs::symlink_metadata(&s) {
-                let file_type = metadata.file_type();
-                match file_type {
-                    t if t.is_dir() => sub_dirs.push(s),
-                    t if t.is_file() => files.push(s),
-                    t if t.is_symlink() => {
-                        if let Some(target) = entry.path().read_link().ok() {
-                            files.push(format!("{} -> {}", get_name(&s), target.display()))
+    match fs::read_dir(path) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let s = entry.path().display().to_string();
+                if get_name(&s).starts_with('.') && !should_show_hidden {
+                    continue;
+                }
+                if let Ok(metadata) = fs::symlink_metadata(&s) {
+                    let file_type = metadata.file_type();
+                    match file_type {
+                        t if t.is_dir() => sub_dirs.push(s),
+                        t if t.is_file() => files.push(s),
+                        t if t.is_symlink() => {
+                            if let Ok(target) = entry.path().read_link() {
+                                files.push(format!("{} -> {}", get_name(&s), target.display()))
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
-        }
-        sub_dirs.sort();
-        files.sort();
-        names.extend(files);
-        names.extend(sub_dirs);
-        return Some(names);
-    }
+            sub_dirs.sort();
+            files.sort();
+            names.extend(files);
+            names.extend(sub_dirs);
 
-    None
+            if names.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(names))
+            }
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn is_valid_path(p: &str) -> bool {
