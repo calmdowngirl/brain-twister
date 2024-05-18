@@ -214,14 +214,18 @@ fn is_valid_path(p: &str) -> bool {
 }
 
 fn is_directory(path: &str) -> bool {
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        metadata.is_dir()
+    if let Ok(metadata) = fs::metadata(path) {
+        metadata.file_type().is_dir()
     } else {
         false
     }
 }
 
 fn get_name(p: &str) -> String {
+    // symlink
+    if p.contains(" -> ") {
+        return p.to_string();
+    }
     let parts: Vec<&str> = p.split('/').collect();
     let name = parts.last().unwrap().to_string();
     if name.is_empty() {
