@@ -7,6 +7,7 @@
 //! ./tree . -d 2 -h true
 //! ```
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{args, current_dir};
 use std::path::Path;
@@ -48,7 +49,7 @@ pub fn main() {
         root,
         "".to_string(),
         &mut should_draw_bar,
-        &mut HashMap::<i32, Vec<String>>::new(),
+        RefCell::new(HashMap::<i32, Vec<String>>::new()),
         0,
         max_depth,
         should_show_hidden,
@@ -65,7 +66,7 @@ impl Tree {
         node: String,
         symbol: String,
         should_draw_bar: &mut Vec<bool>,
-        visited: &mut HashMap<i32, Vec<String>>,
+        visited: RefCell<HashMap<i32, Vec<String>>>,
         mut curr_depth: i32,
         max_depth: i32,
         should_show_hidden: bool,
@@ -81,10 +82,13 @@ impl Tree {
             panic!("invalid path, this should not happen")
         }
 
-        if let Some(v) = visited.get_mut(&curr_depth) {
-            v.push(node.clone())
-        } else {
-            visited.insert(curr_depth, vec![node.clone()]);
+        {
+            let mut vb = visited.borrow_mut();
+            if let Some(v) = vb.get_mut(&curr_depth) {
+                v.push(node.clone())
+            } else {
+                vb.insert(curr_depth, vec![node.clone()]);
+            }
         }
 
         let mut dir_entries_names = None;
@@ -122,8 +126,6 @@ impl Tree {
         println!("{}", s);
         curr_depth += 1;
 
-        let vc = visited.clone();
-
         Tree {
             _root: node.clone(),
             _children: dir_entries_names.map(|values| {
@@ -131,9 +133,12 @@ impl Tree {
                     .into_iter()
                     .enumerate()
                     .filter(|(_, v)| {
-                        let value = vc.get(&curr_depth);
-                        if value.is_none() || !value.unwrap().contains(v) {
-                            return true;
+                        {
+                            let vb = visited.borrow();
+                            let value = vb.get(&curr_depth);
+                            if value.is_none() || !value.unwrap().contains(v) {
+                                return true;
+                            }
                         }
                         false
                     })
@@ -155,7 +160,7 @@ impl Tree {
                             v,
                             symbol,
                             should_draw_bar,
-                            visited,
+                            RefCell::clone(&visited),
                             curr_depth,
                             max_depth,
                             should_show_hidden,
@@ -203,7 +208,7 @@ fn get_dir_entry_names(
                                 files.push(format!("{} -> {}", get_name(&s), target.display()))
                             }
                         }
-                        _ => {}
+                        _ => files.push(s),
                     }
                 }
             }
