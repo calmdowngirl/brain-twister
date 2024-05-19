@@ -7,8 +7,6 @@
 //! ./tree . -d 2 -h true
 //! ```
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::env::{args, current_dir};
 use std::path::Path;
 use std::{fs, io, process};
@@ -49,7 +47,6 @@ pub fn main() {
         root,
         "".to_string(),
         &mut should_draw_bar,
-        RefCell::new(HashMap::<i32, Vec<String>>::new()),
         0,
         max_depth,
         should_show_hidden,
@@ -66,7 +63,6 @@ impl Tree {
         node: String,
         symbol: String,
         should_draw_bar: &mut Vec<bool>,
-        visited: RefCell<HashMap<i32, Vec<String>>>,
         mut curr_depth: i32,
         max_depth: i32,
         should_show_hidden: bool,
@@ -80,15 +76,6 @@ impl Tree {
 
         if !is_valid_path(&node) {
             panic!("invalid path, this should not happen")
-        }
-
-        {
-            let mut vb = visited.borrow_mut();
-            if let Some(v) = vb.get_mut(&curr_depth) {
-                v.push(node.clone())
-            } else {
-                vb.insert(curr_depth, vec![node.clone()]);
-            }
         }
 
         let mut dir_entries_names = None;
@@ -132,16 +119,6 @@ impl Tree {
                 values
                     .into_iter()
                     .enumerate()
-                    .filter(|(_, v)| {
-                        {
-                            let vb = visited.borrow();
-                            let value = vb.get(&curr_depth);
-                            if value.is_none() || !value.unwrap().contains(v) {
-                                return true;
-                            }
-                        }
-                        false
-                    })
                     .map(|(i, v)| {
                         // follow the previous value
                         let next_bar = *should_draw_bar.last().unwrap();
@@ -160,7 +137,6 @@ impl Tree {
                             v,
                             symbol,
                             should_draw_bar,
-                            RefCell::clone(&visited),
                             curr_depth,
                             max_depth,
                             should_show_hidden,
